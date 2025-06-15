@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"io"
 	"mime"
 	"net/http"
@@ -52,12 +51,16 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// `file` is an `io.Reader` that we can read from to get the image data
-	img_data, err := io.ReadAll(file)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Unable to ReadAll from file", err)
-		return
-	}
+	/*
+		old
+		 `file` is an `io.Reader` that we can read from to get the image data
+		img_data, err := io.ReadAll(file)
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Unable to ReadAll from file", err)
+			return
+		}
+	*/
+
 	video, err := cfg.db.GetVideo(videoID)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't find video", err)
@@ -78,18 +81,19 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 	defer file2.Close()
 
-	_, err = io.Copy(file2, bytes.NewReader(img_data))
+	_, err = io.Copy(file2, file)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't copy file", err)
 		return
 	}
 
 	/*
-		//storing the thumbnail in the SQLite as raw binary ... yay
-		// https://www.boot.dev/lessons/78d69134-fd38-44fd-b764-50348e81097f
-		Base64 := base64.StdEncoding.EncodeToString(img_data)
-		DataURL := fmt.Sprintf("data:%s;base64,%s", mediaType, Base64)
-		//url := fmt.Sprintf("http://localhost:%s/api/thumbnails/%s", cfg.port, videoID)
+		old
+			//storing the thumbnail in the SQLite as raw binary ... yay
+			// https://www.boot.dev/lessons/78d69134-fd38-44fd-b764-50348e81097f
+			Base64 := base64.StdEncoding.EncodeToString(img_data)
+			DataURL := fmt.Sprintf("data:%s;base64,%s", mediaType, Base64)
+			//url := fmt.Sprintf("http://localhost:%s/api/thumbnails/%s", cfg.port, videoID)
 	*/
 	url := cfg.getAssetURL(assetPath)
 	video.ThumbnailURL = &url
