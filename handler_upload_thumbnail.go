@@ -1,10 +1,11 @@
 package main
 
 import (
-	"encoding/base64"
-	"fmt"
+	"bytes"
 	"io"
+	"mime"
 	"net/http"
+	"os"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -41,9 +42,13 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 	defer file.Close()
 
-	mediaType := header.Header.Get("Content-Type")
-	if mediaType == "" {
-		respondWithError(w, http.StatusBadRequest, "Missing Content-Type for thumbnail", nil)
+	mediaType, _, err := mime.ParseMediaType(header.Header.Get("Content-Type"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid Content-Type", err)
+		return
+	}
+	if mediaType != "image/jpeg" && mediaType != "image/png" {
+		respondWithError(w, http.StatusBadRequest, "Invalid file type", nil)
 		return
 	}
 
@@ -63,12 +68,31 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	//storing the thumbnail in the SQLite as raw binary ... yay
-	// https://www.boot.dev/lessons/78d69134-fd38-44fd-b764-50348e81097f
-	Base64 := base64.StdEncoding.EncodeToString(img_data)
-	DataURL := fmt.Sprintf("data:%s;base64,%s", mediaType, Base64)
-	//url := fmt.Sprintf("http://localhost:%s/api/thumbnails/%s", cfg.port, videoID)
-	video.ThumbnailURL = &DataURL
+	assetPath := getAssetPath(videoID, mediaType)
+	assetDiskPath := cfg.getAssetDiskPath(assetPath)
+
+	file2, err := os.Create(assetDiskPath)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't create file", err)
+		return
+	}
+	defer file2.Close()
+
+	_, err = io.Copy(file2, bytes.NewReader(img_data))
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't copy file", err)
+		return
+	}
+
+	/*
+		//storing the thumbnail in the SQLite as raw binary ... yay
+		// https://www.boot.dev/lessons/78d69134-fd38-44fd-b764-50348e81097f
+		Base64 := base64.StdEncoding.EncodeToString(img_data)
+		DataURL := fmt.Sprintf("data:%s;base64,%s", mediaType, Base64)
+		//url := fmt.Sprintf("http://localhost:%s/api/thumbnails/%s", cfg.port, videoID)
+	*/
+	url := cfg.getAssetURL(assetPath)
+	video.ThumbnailURL = &url
 
 	err = cfg.db.UpdateVideo(video)
 	if err != nil {
