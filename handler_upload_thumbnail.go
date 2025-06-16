@@ -67,7 +67,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if video.UserID != userID {
-		respondWithError(w, http.StatusUnauthorized, "Not the owner of the video", err)
+		respondWithError(w, http.StatusUnauthorized, "Not the owner of the video", nil)
 		return
 	}
 
